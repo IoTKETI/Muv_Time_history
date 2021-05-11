@@ -19,11 +19,45 @@ exports.ready = function tas_ready () {
     console.log("is running")
 };
 
-async function get_flight_plan(id,drone_info,time_list,flight_time){
-    let plan_time = [];
-    let plan_Data = [];
-    let flight_history_path = conf.ae.parent + '/' +drone_info["gcs"] + '/' + "Information_Data" + '/' + id + '/' + 'Report'+'/'+'Flight_Plan'+'?fu=1&ty=4&la=3';
-    let url = 'http://' + conf.cse.host + ':' + conf.cse.port + flight_history_path;
+function upload_flight_history(totalobj,id){
+    let cnt_path = conf.ae.parent + '/' +'KETI_MUV' + '/' + "Information_Data" + '/' + id + '/' + 'Report';
+    let url = 'http://' + conf.cse.host + ':' + conf.cse.port + cnt_path;
+    let cnt_obj = {};
+    let cin_obj = {};
+    cnt_obj['m2m:cnt'] = {};
+    cnt_obj['m2m:cnt'].rn = 'Flight_History';
+    // console.log(cnt_obj);
+    let resp = request('POST',url,{
+        headers: {
+            'X-M2M-RI': shortid.generate(),
+            'Accept': 'application/' + conf.ae.bodytype,
+            'X-M2M-Origin': conf.ae.id,
+            'Content-Type': 'application/' + conf.ae.bodytype+';ty=3',
+        },
+        body: JSON.stringify(cnt_obj)
+    });
+    if(resp.statusCode == 409 || resp.statusCode == 201){
+        cin_path = cnt_path+'/'+cnt_obj["m2m:cnt"].rn;
+        url = 'http://' + conf.cse.host + ':' + conf.cse.port + cin_path;
+        cin_obj['m2m:cin'] = {};
+        cin_obj['m2m:cin'].con = totalobj;
+        resp = request('POST',url,{
+            headers: {
+                'X-M2M-RI': shortid.generate(),
+                'Accept': 'application/' + conf.ae.bodytype,
+                'X-M2M-Origin': conf.ae.id,
+                'Content-Type': 'application/' + conf.ae.bodytype+';ty=4',
+            },
+            body: JSON.stringify(cin_obj)
+        });
+        console.log(resp.statusCode+" "+id+"---------->\n "+JSON.stringify(cin_obj));
+    }
+}
+
+function total_plan_time(flight_paln,plan_time,id){
+   let get_path = conf.ae.parent + '/' + 'Life_Prediction' + '/' + 'History' +'/'+id+'?rcn=4&ty=4&cra='+plan_time;
+   //  let get_path = '/Mobius/Life_Prediction/History/Zeus?rcn=4&cra=20210204T0619&ty=4';
+    let url = 'http://' + conf.cse.host + ':' + conf.cse.port + get_path;
     let resp = request('GET',url,{
         headers: {
             'X-M2M-RI': shortid.generate(),
@@ -31,98 +65,98 @@ async function get_flight_plan(id,drone_info,time_list,flight_time){
             'X-M2M-Origin': conf.ae.id
         }
     })
-    let crt_time = JSON.parse(resp.getBody())["m2m:uril"];
-    for (let i=0; i<crt_time.length;i++){
-        let flight_history_cin = '/'+crt_time[i];
-            url = 'http://' + conf.cse.host + ':' + conf.cse.port + flight_history_cin;
-            resp = request('GET',url,{
+    try{
+        let rsp = JSON.parse(resp.getBody())["m2m:rsp"]["m2m:cin"];
+        var sumtime = 0;
+        for (var i = 0; i < rsp.length; i++) {
+            console.log(rsp[i].con)
+            sumtime += rsp[i].con.arming_time;
+
+            // console.log(sumtime);
+        }
+        var total_obj = flight_paln;
+        total_obj["plan_total_armingtime"] = sumtime;
+        console.log(total_obj);
+        // obj = JSON.parse(rsp);
+        upload_flight_history(total_obj, id);
+        // console(obj);
+        // }
+    }
+    catch (e) {
+        console.log(e+"\n "+ "Not Flight Date")
+    }
+
+}
+function get_flight_plan(id){
+
+    let get_path = conf.ae.parent + '/' +'KETI_MUV' + '/' + "Information_Data" + '/' + id + '/' + 'Report'+'/'+'Flight_Plan'+'/la';
+    let url = 'http://' + conf.cse.host + ':' + conf.cse.port + get_path;
+    try {
+        let resp = request('GET', url, {
             headers: {
                 'X-M2M-RI': shortid.generate(),
                 'Accept': 'application/' + conf.ae.bodytype,
                 'X-M2M-Origin': conf.ae.id
             }
         })
-        plan_Data[i] = JSON.parse(resp.getBody())["m2m:cin"]
-        plan_time[i] = plan_Data[i]["ct"];
-        plan_time[i] = moment(plan_time[i],"YYYY-MM-DD HH:mm:ss");
+        let flight_paln = JSON.parse(resp.getBody())["m2m:cin"]["con"];
+        plan_time = flight_paln["date"];
+        plan_time = moment(plan_time).add(-9, "h").format('YYYYMMDDTHHmmss');
+        console.log(plan_time);
+        total_plan_time(flight_paln, plan_time, id);
     }
-        for (j = plan_time.length; j >= 0;j--) {
-            for (i = 0; i < flight_time.length; i++) {
-                if (plan_time[j] < flight_time[i]) {
-                    console.log("################################");
-                    console.log("plan:",j,plan_time[j]);
-                    // console.log("plan1:",plan_Data[j]["con"]);
-                    console.log("flight",i,"::",flight_time[i]);
-                    console.log("################################");
-                    cal_obj[i+"_list"].plan = plan_Data[j]["con"];
-                    console.log(cal_obj);
-
-                }
-            }
-
-        }
-        flight_history(id,drone_info);
+    catch (e) {
+        console.log(e)
+    }
 }
 
-async function flight_history(id,drone_info){
-    let flight_history_path = conf.ae.parent + '/' + drone_info["gcs"] + '/' + "Information_Data" + '/' + id + '/' + 'Report'+'/'+'Flight_History';
-    let url = 'http://' + conf.cse.host + ':' + conf.cse.port + flight_history_path;
-    let cin_obj = {}
-    let test_obj = {
-        "0_list": {
-            "Duration_time":"245s",
-            "plan":{
-                "pilot":"비행사1",
-                "pilotEmail":"b_test1@email.com",
-                "date":"2021-01-11",
-                "area":"영월공역",
-                "purpose":"시험비행"
-            }
-        },
-        "1_list": {
-            "Duration_time":"41s",
-            "plan":{
-                "pilot":"비행사1",
-                "pilotEmail":"b_test1@email.com",
-                "date":"2021-01-11",
-                "area":"영월공역",
-                "purpose":"시험비행"
-            }
-        },
-        "2_list": {
-            "Duration_time":"257s",
-            "plan":{
-                "pilot":"비행사1",
-                "pilotEmail":"b_test1@email.com",
-                "date":"2021-01-11",
-                "area":"영월공역",
-                "purpose":"시험비행"
-            }
+function upload_lphistory(lphitory,id){
+    let cnt_path = conf.ae.parent + '/' + 'Life_Prediction' + '/' + 'Response';
+    let url = 'http://' + conf.cse.host + ':' + conf.cse.port + cnt_path;
+    let cnt_obj = {};
+    let cin_obj = {};
+    cnt_obj['m2m:cnt'] = {};
+    cnt_obj['m2m:cnt'].rn = id;
+    try {
+        let resp = request('POST', url, {
+            headers: {
+                'X-M2M-RI': shortid.generate(),
+                'Accept': 'application/' + conf.ae.bodytype,
+                'X-M2M-Origin': conf.ae.id,
+                'Content-Type': 'application/' + conf.ae.bodytype + ';ty=3',
+            },
+            body: JSON.stringify(cnt_obj)
+        });
+        if (resp.statusCode == 409 || resp.statusCode == 201) {
+            flight_history_path = cnt_path + '/' + id;
+            url = 'http://' + conf.cse.host + ':' + conf.cse.port + flight_history_path;
+            cin_obj['m2m:cin'] = {};
+            cin_obj['m2m:cin'].con = lphitory;
+            resp = request('POST', url, {
+                headers: {
+                    'X-M2M-RI': shortid.generate(),
+                    'Accept': 'application/' + conf.ae.bodytype,
+                    'X-M2M-Origin': conf.ae.id,
+                    'Content-Type': 'application/' + conf.ae.bodytype + ';ty=4',
+                },
+                body: JSON.stringify(cin_obj)
+            });
+            console.log(resp.statusCode + " " + id + "---------->\n " + JSON.stringify(cin_obj));
         }
     }
-    cin_obj['m2m:cin'] = {};
-    cin_obj['m2m:cin'].con = test_obj;
-
-    console.log(JSON.stringify(cin_obj));
-    let resp = request('POST',url,{
-        headers: {
-            'X-M2M-RI': shortid.generate(),
-            'Accept': 'application/' + conf.ae.bodytype,
-            'X-M2M-Origin': conf.ae.id,
-            'Content-Type': 'application/' + conf.ae.bodytype+';ty=4',
-        },
-        body: JSON.stringify(cin_obj)
-    });
+    catch (e) {
+        console.log(e)
+    }
 }
-
-let cal_obj = {};
-cal_obj['0_list']={};
-cal_obj['1_list']={};
-cal_obj['2_list']={};
-
-async function cal_time(i,time_list) {
-    let arming_time_path = '/'+time_list;
-    let url = 'http://' + conf.cse.host + ':' + conf.cse.port + arming_time_path +'/la';
+function week_time_calc(resp_cin,id){
+    let crttime = resp_cin["ct"];
+    let flight_time = resp_cin["con"];
+    console.log(crttime);
+    let weektime = moment(crttime).add(-7,"d").format('YYYYMMDDTHHmmss');
+    console.log(weektime);
+    let get_path = conf.ae.parent + '/' + 'Life_Prediction' + '/' + 'History' +'/'+id+'?rcn=4&ty=4&cra='+weektime+'&crb=='+crttime;
+    let url = 'http://' + conf.cse.host + ':' + conf.cse.port + get_path;
+    try{
     let resp = request('GET',url,{
         headers: {
             'X-M2M-RI': shortid.generate(),
@@ -130,32 +164,38 @@ async function cal_time(i,time_list) {
             'X-M2M-Origin': conf.ae.id
         }
     })
-    let end_time = JSON.parse(resp.getBody())["m2m:cin"]["ct"];
+    let rsp = JSON.parse(resp.getBody())["m2m:rsp"]["m2m:cin"];
 
-
-    url = 'http://' + conf.cse.host + ':' + conf.cse.port + arming_time_path;
-    resp = request('GET',url,{
-        headers: {
-            'X-M2M-RI': shortid.generate(),
-            'Accept': 'application/' + conf.ae.bodytype,
-            'X-M2M-Origin': conf.ae.id
-        }
-    })
-    let start_time = JSON.parse(resp.getBody())["m2m:cnt"]["ct"];
-    // let start_time = arming_time_path.split('/');
-    // console.log(start_time[start_time.length-2],end_time);
-    start_time = moment(start_time,"YYYY-MM-DD HH:mm:ss");
-    end_time = moment(end_time,"YYYY-MM-DD HH:mm:ss");
-    let du_time = moment.duration(end_time.diff(start_time)).asSeconds();
-    cal_obj[i+"_list"].Duration_time = du_time +'s';
-
-    return start_time
+    var sumtime = 0;
+    for(var i = 0; i < rsp.length;i++){
+        sumtime += rsp[i].con.arming_time;
+    }
+    lp_history(flight_time,sumtime,id);
+    }
+    catch (e) {
+        console.log(e)
+    }
 }
 
-async function get_Arming_time(id,drone_info){
-    let start_time = [];
-    let arming_list_path = conf.ae.parent + '/' +drone_info["gcs"] + '/' + "Drone_Data" + '/' + drone_info["drone"]+'?fu=1&ty=3&la=3';
-    let url = 'http://' + conf.cse.host + ':' + conf.cse.port + arming_list_path;
+
+function lp_history(lp_history,sumtime,id){
+    delete lp_history["sortie_name"];
+    delete lp_history["arming_time"];
+    lp_history.last_week_flight_time = sumtime;
+    lp_history.total_battery_time = 100;
+    lp_history.total_motor_time = 100;
+    lp_history.battery_life = 100;
+    lp_history.motor_life = 100;
+    // console.log("\n"+JSON.stringify(lp_history));
+    upload_lphistory(lp_history,id);
+    //최근 1주일 비행시간은 추후 고려
+    //수명예지 function 기능 들어갈자리
+}
+
+function get_flight_time(id){
+    let get_path = conf.ae.parent + '/' + 'Life_Prediction' + '/' + 'History' +'/'+id+'/la';
+    let url = 'http://' + conf.cse.host + ':' + conf.cse.port + get_path;
+    try{
     let resp = request('GET',url,{
         headers: {
             'X-M2M-RI': shortid.generate(),
@@ -163,31 +203,14 @@ async function get_Arming_time(id,drone_info){
             'X-M2M-Origin': conf.ae.id
         }
     })
-    const time_list = JSON.parse(resp.getBody())["m2m:uril"];
-    for (var i=0; i<time_list.length;i++){
-        start_time[i] = await cal_time(i,time_list[i]);
-    }
-    if(i >= 2){
-        console.log(cal_obj);
-        get_flight_plan(id,drone_info,time_list,start_time);
-    }
+    let resp_cin = JSON.parse(resp.getBody())['m2m:cin'];
 
-}
-
-async function get_Drone_info(id){
-    let info_parent_path = conf.ae.parent + '/' + 'MUV' + '/' + 'approval' +'/'+id+'/la';
-    let url = 'http://' + conf.cse.host + ':' + conf.cse.port + info_parent_path;
-    let resp = request('GET',url,{
-        headers: {
-            'X-M2M-RI': shortid.generate(),
-            'Accept': 'application/' + conf.ae.bodytype,
-            'X-M2M-Origin': conf.ae.id
-        }
-    })
-    // console.log(JSON.stringify(JSON.parse(resp.getBody()),null,2));
-    const drone_info = JSON.parse(resp.getBody())['m2m:cin']['con'];
-    console.log(drone_info);
-    await get_Arming_time(id,drone_info);
+    week_time_calc(resp_cin,id);
+    get_flight_plan(id);
+    }
+    catch (e) {
+        console.log(e)
+    }
 }
 
 exports.noti = function(path_arr, cinObj) {
@@ -198,6 +221,7 @@ exports.noti = function(path_arr, cinObj) {
         console.log('---- is not cin message');
     }
     else {
-        get_Drone_info(cin.con);
+        get_flight_time(cin.con);
+        // get_Drone_info(cin.con);
     }
 };

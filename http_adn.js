@@ -95,15 +95,7 @@ function http_request(path, method, ty, bodyString, callback) {
             }
             else {
                 try {
-                    if(res_body != "") {
-                        // console.log('########' + res_body)
-                        var jsonObj = JSON.parse(res_body);
-                        // callback(res, jsonObj);
-                    }
-                    else{
-                        var jsonObj = {};
-                        jsonObj.dbg = res_body;
-                    }
+                    var jsonObj = JSON.parse(res_body);
                     callback(res, jsonObj);
                 }
                 catch (e) {
@@ -239,6 +231,7 @@ exports.crtct = function(parent, rn, count, callback) {
         results_ct['m2m:cnt'].rn = rn;
         results_ct['m2m:cnt'].lbl = [rn];
         bodyString = JSON.stringify(results_ct);
+        console.log(bodyString);
     }
 
     http_request(parent, 'post', '3', bodyString, function (res, res_body) {
@@ -249,7 +242,7 @@ exports.crtct = function(parent, rn, count, callback) {
 };
 
 
-exports.rtvct = async function(target, count, callback) {
+exports.rtvct = function(target, count, callback) {
     http_request(target, 'get', '', '', function (res, res_body) {
         console.log(count + ' - ' + target + ' - x-m2m-rsc : ' + res.headers['x-m2m-rsc'] + ' <----');
         console.log(res_body);
@@ -300,7 +293,7 @@ exports.crtsub = function(parent, rn, nu, count, callback) {
     var results_ss = {};
     var bodyString = '';
     if (conf.ae.bodytype === 'xml') {
-        results_ss.enc = {net: [3]};
+        results_ss.enc = {net: [1,2,3,4]};
         results_ss.nu = [nu];
         results_ss.nct = 2;
         results_ss['@'] = {
@@ -314,7 +307,7 @@ exports.crtsub = function(parent, rn, nu, count, callback) {
     else if(conf.ae.bodytype === 'cbor') {
         results_ss['m2m:sub'] = {};
         results_ss['m2m:sub'].rn = rn;
-        results_ss['m2m:sub'].enc = {net: [3]};
+        results_ss['m2m:sub'].enc = {net: [1,2,3,4]};
         results_ss['m2m:sub'].nu = [nu];
         results_ss['m2m:sub'].nct = 2;
         bodyString = cbor.encode(results_ss).toString('hex');
@@ -323,11 +316,13 @@ exports.crtsub = function(parent, rn, nu, count, callback) {
     else {
         results_ss['m2m:sub'] = {};
         results_ss['m2m:sub'].rn = rn;
-        results_ss['m2m:sub'].enc = {net: [3]};
+        results_ss['m2m:sub'].enc = {net: [1,2,3,4]};
         results_ss['m2m:sub'].nu = [nu];
         results_ss['m2m:sub'].nct = 2;
+        //results_ss['m2m:sub'].exc = 0;
 
         bodyString = JSON.stringify(results_ss);
+        console.log(bodyString);
     }
 
     http_request(parent, 'post', '23', bodyString, function (res, res_body) {
@@ -374,13 +369,6 @@ exports.crtci = function(parent, count, content, socket, callback) {
 
     http_request(parent, 'post', '4', bodyString, function (res, res_body) {
         callback(res.headers['x-m2m-rsc'], res_body, parent, socket);
-    });
-};
-exports.rtvci = function(target, count, callback) {
-    http_request(target, 'get', '', '', function (res, res_body) {
-        console.log(count + ' - ' + target + ' - x-m2m-rsc : ' + res.headers['x-m2m-rsc'] + ' <----');
-        // console.log(res_body);
-        callback(res.headers['x-m2m-rsc'], res_body, count);
     });
 };
 
