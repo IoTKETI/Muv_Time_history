@@ -157,14 +157,18 @@ function http_watchdog() {
             if (status == 2001) {
                 ae_response_action(status, res_body, function (status, aeid) {
                     console.log('x-m2m-rsc : ' + status + ' - ' + aeid + ' <----');
-                    sh_state = 'crtct';
+                    sh_state = 'rtvae';
                     request_count = 0;
                     return_count = 0;
+
+                    setTimeout(http_watchdog, 100);
                 });
             }
             else if (status == 5106 || status == 4105) {
                 console.log('x-m2m-rsc : ' + status + ' <----');
-                sh_state = 'rtvae'
+                sh_state = 'rtvae';
+
+                setTimeout(http_watchdog, 100);
             }
         });
     }
@@ -176,7 +180,6 @@ function http_watchdog() {
         console.log('[sh_state] : ' + sh_state);
         sh_adn.rtvae(conf.ae.parent + '/' + conf.ae.name, function (status, res_body) {
             if (status == 2000) {
-                // console.log("########"+JSON.stringify(res_body));
                 var aeid = res_body['m2m:ae']['aei'];
                 console.log('x-m2m-rsc : ' + status + ' - ' + aeid + ' <----');
 
@@ -187,74 +190,80 @@ function http_watchdog() {
                     sh_state = 'crtct';
                     request_count = 0;
                     return_count = 0;
+
+                    setTimeout(http_watchdog, 100);
                 }
             }
             else {
                 console.log('x-m2m-rsc : ' + status + ' <----');
+                setTimeout(http_watchdog, 1000);
             }
         });
     }
     else if (sh_state === 'crtct') {
         console.log('[sh_state] : ' + sh_state);
-        if(return_count == 0) {
-            create_cnt_all(request_count, function (status, count) {
+        create_cnt_all(request_count, function (status, count) {
+            if(status == 9999) {
+                setTimeout(http_watchdog, 1000);
+            }
+            else {
                 request_count = ++count;
                 return_count = 0;
                 if (conf.cnt.length <= count) {
                     sh_state = 'delsub';
                     request_count = 0;
                     return_count = 0;
+
+                    setTimeout(http_watchdog, 100);
                 }
-            });
-        }
-        return_count++;
-        if(return_count >= 3) {
-            return_count = 0;
-        }
+            }
+        });
     }
-    if (sh_state === 'delsub') {
+    else if (sh_state === 'delsub') {
         console.log('[sh_state] : ' + sh_state);
-        if(return_count == 0) {
-            delete_sub_all(request_count, function (status, count) {
+        delete_sub_all(request_count, function (status, count) {
+            if(status == 9999) {
+                setTimeout(http_watchdog, 1000);
+            }
+            else {
                 request_count = ++count;
                 return_count = 0;
                 if (conf.sub.length <= count) {
                     sh_state = 'crtsub';
                     request_count = 0;
                     return_count = 0;
+
+                    setTimeout(http_watchdog, 100);
                 }
-            });
-        }
-        return_count++;
-        if(return_count >= 3) {
-            return_count = 0;
-        }
+            }
+        });
     }
     else if (sh_state === 'crtsub') {
         console.log('[sh_state] : ' + sh_state);
-        if(return_count == 0) {
-            create_sub_all(request_count, function (status, count) {
+        create_sub_all(request_count, function (status, count) {
+            if(status == 9999) {
+                setTimeout(http_watchdog, 1000);
+            }
+            else {
                 request_count = ++count;
                 return_count = 0;
                 if (conf.sub.length <= count) {
                     sh_state = 'crtci';
+
                     ready_for_notification();
+
                     tas.ready();
+
+                    setTimeout(http_watchdog, 100);
                 }
-            });
-        }
-        return_count++;
-        if(return_count >= 3) {
-            return_count = 0;
-        }
+            }
+        });
     }
     else if (sh_state === 'crtci') {
-
     }
 }
 
-wdt.set_wdt(require('shortid').generate(), 0.5, http_watchdog);
-
+setTimeout(http_watchdog, 100);
 
 // for notification
 //var xmlParser = bodyParser.text({ type: '*/*' });
